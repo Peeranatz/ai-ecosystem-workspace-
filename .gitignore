@@ -1,2 +1,8 @@
 *.docx
 backend/sandbox/screenshots/
+logs/
+backend/logs/
+*.log
+backend/sandbox/minio/downloaded_*
+backend/sandbox/minio/profile_*
+backend/sandbox/minio/sample_upload.txt

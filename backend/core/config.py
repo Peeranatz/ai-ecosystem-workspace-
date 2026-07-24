@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     postgres_db: str
     label_studio_url: str
     label_studio_api_key: str
+    minio_endpoint: str = "localhost:9000"
+    minio_root_user: str = "minioadmin"
+    minio_root_password: str = "minioadmin"
+    minio_bucket: str = "user-profiles"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
