@@ -1,5 +1,13 @@
 # AI Ecosystem Web API Workspace (FastAPI)
 
+![Python](https://img.shields.io/badge/Python-3.12%2B-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql)
+![MinIO](https://img.shields.io/badge/MinIO-S3--Storage-C72C48?logo=minio)
+![Redis](https://img.shields.io/badge/Redis-Task--Queue-DC382D?logo=redis)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
+![Architecture](https://img.shields.io/badge/Architecture-Clean--Layered-orange)
+
 > **Enterprise Clean Architecture Web API for AI Ecosystem Lifecycle (MLOps)**  
 > พัฒนาด้วย **FastAPI, PostgreSQL 17, MinIO Object Storage, Redis Task Queue** และ **Docker Compose**
 
@@ -57,6 +65,54 @@
 3. **Immutability Policy (ความไม่เปลี่ยนรูปของข้อมูล):** บังคับใช้นโยบาย **Append-Only Log** สำหรับตารางทะเบียนโมเดล (`model_record`) โดยใช้วิธี `INSERT` สร้างเวอร์ชันใหม่เสมอ (`v1.0.0` ➔ `v1.1.0`) เพื่อรักษาร่องรอยการตรวจสอบ (Audit Trail) และสามารถย้อนกลับ (Rollback) ได้ 100%
 4. **Twelve-Factor App Methodology:** ปฏิบัติตาม Config Factor (Factor III) แยกค่าตั้งค่า ข้อมูลฐานข้อมูล และ Secret Keys ออกจากโค้ดไปใส่ในไฟล์ **`.env`**
 5. **Structured JSON Logging:** บันทึก Log การทำงานทั้งหมดของแอปพลิเคชันเป็นรูปแบบ **JSON Format** ที่มี Key-Value มาตรฐาน รองรับการนำ Log ไปวิเคราะห์และทำแดชบอร์ดเฝ้าระวังระบบร่วมกับ Grafana Loki หรือ ELK Stack
+
+---
+
+## 🔀 กระบวนการทำงานของข้อมูล (Data Flow Scenarios)
+
+### Scenario A: การยิงขอผลทำนาย AI (Low-Latency Inference Flow)
+```text
+[ Client ] ---> POST /api/v1/predict (Input Data)
+                  |
+                  v
+         [ predict_router ]
+                  |
+                  v
+       [ inference_service ] ---> Load Weights from RAM / MinIO
+                  |
+                  v
+  [ Client ] <--- Return JSON Prediction ({ label: "cat", confidence: 0.984 })
+```
+
+### Scenario B: การสั่งฝึกฝนโมเดล AI เบื้องหลัง (Asynchronous Heavy Training Flow)
+```text
+[ Admin Client ] ---> POST /api/v1/training/start
+                         |
+                         +---> (1) Save DB Status "PENDING"
+                         +---> (2) Push Job Payload to Redis Task Queue
+                         |
+[ Admin Client ] <--- (3) Return HTTP 202 Accepted + job_id (Immediate Non-blocking)
+       |
+       v (Polling)
+[ GET /api/v1/training/status/{job_id} ] <--- Check Progress Status
+                                                    ^
+                                                    |
+                                      [ Background Training Worker ]
+                                        - Pulls task from Redis
+                                        - Downloads dataset from MinIO
+                                        - Saves new weights (.pt) to MinIO
+                                        - Updates DB status to "COMPLETED"
+```
+
+---
+
+## 🗄️ ตารางเปรียบเทียบการจัดเก็บข้อมูล (Storage Isolation Matrix)
+
+| เทคโนโลยี Storage | ชนิดข้อมูลที่จัดเก็บ (Data Type) | เหตุผลทางสถาปัตยกรรม (Architectural Rationale) |
+| :--- | :--- | :--- |
+| **PostgreSQL 17** (Port 5433) | Relational Data: Users, Dataset Metadata, Model Registry Records | ต้องการ ACID Compliance, Relational Integrity และการค้นหา Metadata ที่รวดเร็ว |
+| **MinIO Storage** (Port 9000/9001) | Unstructured Large Files: Raw CSV/ZIP Datasets, PyTorch `.pt` Model Weights | ป้องกันไม่ให้ไฟล์ไบนารีขนาดใหญ่ส่งผลให้ฐานข้อมูลอืดบวม |
+| **Redis Server** (Port 6379) | In-Memory Key-Value: Task Queue Payloads, RAM Caching Layer | ต้องการความเร็วอ่าน-เขียนระดับ Microsecond และการส่งงานคิวประมวลผลเบื้องหลัง |
 
 ---
 
@@ -123,6 +179,29 @@ ai-ecosystem-workspace/
 | **5. Inference & Monitoring** | `POST` | `/api/v1/predict` | ส่งข้อมูลเข้าประมวลผลทำนายผลความเร็วสูง (Low-latency Inference) |
 | | `GET` | `/api/v1/system/health` | ตรวจเช็คสุขภาพการเชื่อมต่อ PING ไปยัง PostgreSQL, MinIO, Redis |
 | | `GET` | `/api/v1/system/logs` | เรียกดูประวัติ Log การทำงานรูปแบบ Structured JSON |
+
+---
+
+## 🪵 ตัวอย่าง Structured JSON Logging (System Logging Spec)
+
+แอปพลิเคชันได้รับการติดตั้ง Middleware บันทึก Log การทำงานในรูปแบบ **Machine-Readable Structured JSON Format** สำหรับรองรับระบบ Observability:
+
+```json
+{
+  "timestamp": "2026-07-30T18:47:58.357524+00:00",
+  "system_name": "ai-ecosystem-backend",
+  "log_level": "INFO",
+  "message": "GET /docs - Status: 200 - 2.57ms",
+  "module": "main",
+  "filename": "main.py",
+  "lineno": 41,
+  "http_method": "GET",
+  "endpoint": "/docs",
+  "status_code": 200,
+  "execution_time_ms": 2.57,
+  "client_ip": "127.0.0.1"
+}
+```
 
 ---
 
