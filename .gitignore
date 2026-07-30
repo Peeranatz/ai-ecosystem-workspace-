@@ -2,6 +2,9 @@
 backend/sandbox/screenshots/
 backend/sandbox/slide_images/
 FASTAPI_STUDY_GUIDE.md
+FASTAPI_PRESENTATION_SCRIPT.md
+FASTAPI_SKY_PRESENTATION_SCRIPT.md
+FASTAPI_AI_ECOSYSTEM_REPORT.md
 *.pdf
 logs/
 backend/logs/
