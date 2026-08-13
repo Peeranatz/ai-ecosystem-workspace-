@@ -17,5 +17,6 @@ dependencies = [
     "pyjwt>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.9",
-    "label-studio-sdk>=2.1.0"
+    "label-studio-sdk>=2.1.0",
+    "openpyxl>=3.1.0"
 ]

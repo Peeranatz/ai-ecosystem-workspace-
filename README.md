@@ -9,7 +9,7 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Clean--Layered-orange)
 
 > **Enterprise Clean Architecture Web API for AI Ecosystem Lifecycle (MLOps)**  
-> พัฒนาด้วย **FastAPI, PostgreSQL 17, MinIO Object Storage, Redis Task Queue** และ **Docker Compose**
+> พัฒนาด้วย **FastAPI, PostgreSQL 17, MinIO Object Storage, Redis Task Queue, Label Studio SDK** และ **Docker Compose**
 
 ---
 
@@ -21,7 +21,24 @@
 
 ## 📌 ภาพรวมและวัตถุประสงค์ของโปรเจกต์ (Project Overview)
 
-โปรเจกต์นี้จัดทำขึ้นเพื่อออกแบบและพัฒนาระบบ **Web API ระดับองค์กรสำหรับรองรับระบบ AI Ecosystem** ที่ครอบคลุมวงจรชีวิตการบริหารจัดการปัญญาประดิษฐ์ (MLOps Lifecycle) ตั้งแต่การนำเข้าชุดข้อมูล, การฝึกฝนโมเดลแบบ Asynchronous, การลงทะเบียนเวอร์ชันโมเดล, การให้บริการทำนายผล (Inference) ความเร็วสูง, ไปจนถึงการเฝ้าระวังสุขภาพระบบและการจัดทำ Log แบบ Structured JSON Format
+โปรเจกต์นี้จัดทำขึ้นเพื่อออกแบบและพัฒนาระบบ **Web API ระดับองค์กรสำหรับรองรับระบบ AI Ecosystem (WTN-A06)** ที่ครอบคลุมวงจรชีวิตการบริหารจัดการปัญญาประดิษฐ์ (MLOps Lifecycle) ตั้งแต่การนำเข้าชุดข้อมูล, การฝึกฝนโมเดลแบบ Asynchronous ทั้งแบบ Time-Series และ Non-Time-Series Workers, การกำกับแท็กข้อมูลด้วย Label Studio SDK, การลงทะเบียนเวอร์ชันโมเดล, การให้บริการทำนายผล (Inference) ความเร็วสูง, ไปจนถึงการเฝ้าระวังสุขภาพระบบและการจัดทำ Log แบบ Structured JSON Format
+
+---
+
+## 📂 ดัชนีคู่มือประจำโฟลเดอร์ย่อย (Subfolder Documentation Index)
+
+ตามข้อกำหนดของงาน **WTN-A06** ในทุกๆ Subfolder สำคัญของระบบ ได้รับการจัดทำไฟล์ `README.md` ประจำโฟลเดอร์สำหรับอธิบายรายละเอียดการทำงานและไกด์สำหรับนักพัฒนา:
+
+* 📘 **[backend/README.md](backend/README.md)**: ภาพรวมบริการ Backend ทั้งหมด
+* 📘 **[backend/app/README.md](backend/app/README.md)**: สถาปัตยกรรม Clean Architecture และทิศทางเรียกใช้โค้ด
+* 📘 **[backend/app/core/README.md](backend/app/core/README.md)**: ระบบคอนฟิกูเรชัน `.env` และการออก JWT Tokens
+* 📘 **[backend/app/routers/README.md](backend/app/routers/README.md)**: จุดเชื่อมต่อ API ทั้ง 7 โดเมนงาน
+* 📘 **[backend/app/schemas/README.md](backend/app/schemas/README.md)**: Pydantic Validation Schemas
+* 📘 **[backend/app/services/README.md](backend/app/services/README.md)**: ตรรกะธุรกิจ และ SDK Client Services (MinIO, Label Studio, Worker)
+* 📘 **[backend/app/models/README.md](backend/app/models/README.md)**: ตารางฐานข้อมูล PostgreSQL (SQLAlchemy ORM)
+* 📘 **[backend/app/utils/README.md](backend/app/utils/README.md)**: ระบบ Structured JSON Logger
+* 📘 **[backend/sandbox/README.md](backend/sandbox/README.md)**: สภาพแวดล้อมทดลองและ PoC Scripts
+* 📘 **[backend/scripts/README.md](backend/scripts/README.md)**: สคริปต์แปลง `openapi.json` ➔ Excel/CSV (`export_openapi_excel.py`)
 
 ---
 
@@ -44,8 +61,8 @@
             v (Sync HTTP)                                   v (Async Queue)
 +------------------------------------+    +-----------------------------+
 |    CENTRAL FASTAPI SERVER LAYER    |    |  BACKGROUND WORKERS LAYER   |
-|  - Routers Layer (Endpoints)       |    |  - Job Workers              |
-|  - Services Layer (Business Logic) |    |  - Training Workers (GPU)   |
+|  - Routers Layer (Endpoints)       |    |  - Time-Series Worker       |
+|  - Services Layer (Business Logic) |    |  - Non-Time-Series Worker   |
 |  - Models Layer (SQLAlchemy ORM)   |    +-----------------------------+
 +------------------------------------+                  |
             |                                           |
@@ -58,108 +75,9 @@
 +-----------------------------------------------------------------------+
 ```
 
-### 🌟 5 เสาหลักการออกแบบระบบ (5 Architectural Pillars)
-
-1. **Separation of Concerns (การแบ่งแยกหน้าที่):** ออกแบบระบบเป็น Layered Design แยกชั้น `routers/` (Presentation), `schemas/` (Validation), `services/` (Business Logic), และ `models/` (Data Access) ออกจากกันอย่างเด็ดขาด
-2. **Dependency Injection (`Depends`):** ประยุกต์ใช้กลไก `Depends()` ของ FastAPI สำหรับการฉีดการเชื่อมต่อ Database Connection Session และการดักตรวจสอบสิทธิ์ JWT โดยระบบจะทำการคืนทรัพยากรให้อัตโนมัติเมื่อประมวลผลเสร็จสิ้น
-3. **Immutability Policy (ความไม่เปลี่ยนรูปของข้อมูล):** บังคับใช้นโยบาย **Append-Only Log** สำหรับตารางทะเบียนโมเดล (`model_record`) โดยใช้วิธี `INSERT` สร้างเวอร์ชันใหม่เสมอ (`v1.0.0` ➔ `v1.1.0`) เพื่อรักษาร่องรอยการตรวจสอบ (Audit Trail) และสามารถย้อนกลับ (Rollback) ได้ 100%
-4. **Twelve-Factor App Methodology:** ปฏิบัติตาม Config Factor (Factor III) แยกค่าตั้งค่า ข้อมูลฐานข้อมูล และ Secret Keys ออกจากโค้ดไปใส่ในไฟล์ **`.env`**
-5. **Structured JSON Logging:** บันทึก Log การทำงานทั้งหมดของแอปพลิเคชันเป็นรูปแบบ **JSON Format** ที่มี Key-Value มาตรฐาน รองรับการนำ Log ไปวิเคราะห์และทำแดชบอร์ดเฝ้าระวังระบบร่วมกับ Grafana Loki หรือ ELK Stack
-
 ---
 
-## 🔀 กระบวนการทำงานของข้อมูล (Data Flow Scenarios)
-
-### Scenario A: การยิงขอผลทำนาย AI (Low-Latency Inference Flow)
-```text
-[ Client ] ---> POST /api/v1/predict (Input Data)
-                  |
-                  v
-         [ predict_router ]
-                  |
-                  v
-       [ inference_service ] ---> Load Weights from RAM / MinIO
-                  |
-                  v
-  [ Client ] <--- Return JSON Prediction ({ label: "cat", confidence: 0.984 })
-```
-
-### Scenario B: การสั่งฝึกฝนโมเดล AI เบื้องหลัง (Asynchronous Heavy Training Flow)
-```text
-[ Admin Client ] ---> POST /api/v1/training/start
-                         |
-                         +---> (1) Save DB Status "PENDING"
-                         +---> (2) Push Job Payload to Redis Task Queue
-                         |
-[ Admin Client ] <--- (3) Return HTTP 202 Accepted + job_id (Immediate Non-blocking)
-       |
-       v (Polling)
-[ GET /api/v1/training/status/{job_id} ] <--- Check Progress Status
-                                                    ^
-                                                    |
-                                      [ Background Training Worker ]
-                                        - Pulls task from Redis
-                                        - Downloads dataset from MinIO
-                                        - Saves new weights (.pt) to MinIO
-                                        - Updates DB status to "COMPLETED"
-```
-
----
-
-## 🗄️ ตารางเปรียบเทียบการจัดเก็บข้อมูล (Storage Isolation Matrix)
-
-| เทคโนโลยี Storage | ชนิดข้อมูลที่จัดเก็บ (Data Type) | เหตุผลทางสถาปัตยกรรม (Architectural Rationale) |
-| :--- | :--- | :--- |
-| **PostgreSQL 17** (Port 5433) | Relational Data: Users, Dataset Metadata, Model Registry Records | ต้องการ ACID Compliance, Relational Integrity และการค้นหา Metadata ที่รวดเร็ว |
-| **MinIO Storage** (Port 9000/9001) | Unstructured Large Files: Raw CSV/ZIP Datasets, PyTorch `.pt` Model Weights | ป้องกันไม่ให้ไฟล์ไบนารีขนาดใหญ่ส่งผลให้ฐานข้อมูลอืดบวม |
-| **Redis Server** (Port 6379) | In-Memory Key-Value: Task Queue Payloads, RAM Caching Layer | ต้องการความเร็วอ่าน-เขียนระดับ Microsecond และการส่งงานคิวประมวลผลเบื้องหลัง |
-
----
-
-## 📁 โครงสร้างโปรเจกต์ (Clean Architecture Directory Layout)
-
-```text
-ai-ecosystem-workspace/
-├── compose.yml                # Docker Compose (PostgreSQL, MinIO, Redis, Label Studio)
-├── README.md                  # เอกสารอธิบายโปรเจกต์
-└── backend/
-    ├── main.py                # Top-level Entry point (uvicorn runner)
-    ├── pyproject.toml         # จัดการ Dependencies ด้วย uv (FastAPI, Uvicorn, SQLAlchemy, etc.)
-    └── app/
-        ├── main.py            # แอปพลิเคชันหลัก FastAPI, CORS & Logging Middleware
-        ├── core/
-        │   ├── config.py      # Pydantic BaseSettings สำหรับโหลดไฟล์ .env
-        │   └── security.py    # Bcrypt Hashing & JWT Access Token Generator
-        ├── routers/           # Presentation Layer (API Endpoints 6 กลุ่ม)
-        │   ├── auth_router.py
-        │   ├── dataset_router.py
-        │   ├── model_router.py
-        │   ├── training_router.py
-        │   ├── predict_router.py
-        │   └── system_router.py
-        ├── schemas/           # Validation Layer (Pydantic Models)
-        │   ├── auth_schema.py
-        │   ├── dataset_schema.py
-        │   ├── model_schema.py
-        │   ├── training_schema.py
-        │   └── system_schema.py
-        ├── services/          # Business Logic Layer
-        │   ├── auth_service.py
-        │   ├── dataset_service.py
-        │   ├── model_service.py
-        │   ├── training_service.py
-        │   └── inference_service.py
-        ├── models/            # Data Access Layer (SQLAlchemy ORM Entities)
-        │   ├── user_model.py
-        │   ├── dataset_model.py
-        │   └── model_record_model.py
-        └── utils/
-            └── logger.py      # Custom Structured JSON Logger
-```
-
----
-
-## 📡 รายละเอียด API ที่พึงมีใน AI Ecosystem (5 Domains API Specification)
+## 📊 รายละเอียด API Snapshot (7 Domains Specification)
 
 | โดเมนงาน (Domain) | HTTP Verb | API Endpoint | หน้าที่และการทำงาน (Functionality) |
 | :--- | :---: | :--- | :--- |
@@ -176,52 +94,33 @@ ai-ecosystem-workspace/
 | **4. Async Training** | `POST` | `/api/v1/training/start` | สั่งเริ่มฝึกโมเดล คืนค่า **`202 Accepted`** + `job_id` โยนงานเข้า Redis Queue |
 | | `GET` | `/api/v1/training/status/{job_id}` | ตรวจสอบสถานะและความคืบหน้าการฝึกโมเดล (Polling) |
 | | `POST` | `/api/v1/training/cancel/{job_id}` | ยกเลิกงานฝึกโมเดลในคิว |
-| **5. Inference & Monitoring** | `POST` | `/api/v1/predict` | ส่งข้อมูลเข้าประมวลผลทำนายผลความเร็วสูง (Low-latency Inference) |
-| | `GET` | `/api/v1/system/health` | ตรวจเช็คสุขภาพการเชื่อมต่อ PING ไปยัง PostgreSQL, MinIO, Redis |
+| **5. Inference** | `POST` | `/api/v1/predict` | ส่งข้อมูลเข้าประมวลผลทำนายผลความเร็วสูง (Low-latency Inference) |
+| **6. Label Studio** | `GET` | `/api/v1/ls/projects` | ดึงรายการโครงการกำกับแท็กข้อมูลจาก Label Studio SDK |
+| | `POST` | `/api/v1/ls/projects` | สร้างโครงการกำกับแท็กข้อมูลใหม่ใน Label Studio |
+| | `POST` | `/api/v1/ls/tasks/import` | นำเข้าชุดข้อมูลเพื่อเตรียมกำกับแท็กคำบรรยาย |
+| | `GET` | `/api/v1/ls/annotations/export` | ส่งออกผลการกำกับแท็กข้อมูลนำไปฝึกโมเดล AI |
+| **7. Monitoring & Health** | `GET` | `/api/v1/system/health` | ตรวจเช็คสุขภาพการเชื่อมต่อ PING ไปยัง PostgreSQL, MinIO, Redis |
 | | `GET` | `/api/v1/system/logs` | เรียกดูประวัติ Log การทำงานรูปแบบ Structured JSON |
 
 ---
 
-## 🪵 ตัวอย่าง Structured JSON Logging (System Logging Spec)
-
-แอปพลิเคชันได้รับการติดตั้ง Middleware บันทึก Log การทำงานในรูปแบบ **Machine-Readable Structured JSON Format** สำหรับรองรับระบบ Observability:
-
-```json
-{
-  "timestamp": "2026-07-30T18:47:58.357524+00:00",
-  "system_name": "ai-ecosystem-backend",
-  "log_level": "INFO",
-  "message": "GET /docs - Status: 200 - 2.57ms",
-  "module": "main",
-  "filename": "main.py",
-  "lineno": 41,
-  "http_method": "GET",
-  "endpoint": "/docs",
-  "status_code": 200,
-  "execution_time_ms": 2.57,
-  "client_ip": "127.0.0.1"
-}
-```
-
----
-
-## ⚡ วิธีการรันโปรเจกต์บนเครื่องตนเอง (Getting Started)
+## ⚡ วิธีการรันโปรเจกต์และสคริปต์ส่งออก Excel/CSV
 
 ### 1. ติดตั้ง Backing Services ด้วย Docker Compose
 ```bash
 docker compose up -d
 ```
-*บริการที่รันขึ้นมา:*
-* **PostgreSQL 17:** `localhost:5433`
-* **MinIO Console:** `http://localhost:9001` (User: `minioadmin`, Pass: `minioadmin`)
-* **Redis Server:** `localhost:6379`
-* **Label Studio:** `http://localhost:8080`
 
 ### 2. รันแอปพลิเคชันเซิร์ฟเวอร์หลัก (FastAPI Backend)
 ```bash
 cd backend
 uv run uvicorn app.main:app --reload
 ```
+เปิดดูหน้าเอกสาร **Swagger UI** ได้ที่: 👉 **`http://127.0.0.1:8000/docs`**
 
-### 3. เข้าทดสอบ API ผ่าน Swagger UI
-เปิดเว็บเบราว์เซอร์ไปที่: 👉 **`http://127.0.0.1:8000/docs`**
+### 3. รันสคริปต์สกัด API List เป็นไฟล์ Excel (`.xlsx`) และ CSV
+```bash
+cd backend
+uv run python scripts/export_openapi_excel.py
+```
+ผลลัพธ์จะสร้างไฟล์ `api_list_snapshot.xlsx` และ `api_list_snapshot.csv` ในโฟลเดอร์ `backend/` ทันที!
