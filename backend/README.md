@@ -33,10 +33,10 @@
 cd backend
 uv run uvicorn app.main:app --reload
 ```
-เปิดดูหน้าเอกสาร **Swagger UI** ที่: `http://127.0.0.1:8000/docs`
+เปิดดูหน้าเอกสาร **Swagger UI** ที่: 👉 **`http://127.0.0.1:8000/docs`**
 
 ### 2. รันสคริปต์ Snapshot API List ➔ Excel / CSV
 ```bash
 uv run python scripts/export_openapi_excel.py
 ```
-ผลลัพธ์จะถูกส่งออกเป็นไฟล์ `api_list_snapshot.xlsx` และ `api_list_snapshot.csv`
+ผลลัพธ์จะสร้างไฟล์ `api_list_snapshot.xlsx` และ `api_list_snapshot.csv` ในโฟลเดอร์ `backend/` ทันที!
