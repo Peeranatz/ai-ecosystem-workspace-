@@ -150,63 +150,43 @@ uv run python scripts/export_openapi_excel.py
 
 ## 7. ภาพประกอบผลการทำงานของระบบ (System Visual Evidence)
 
-> **[พื้นที่สำหรับแคปเจอร์รูปภาพระบบจริงลงเอกสาร Word]**
+### 7.1 ภาพหน้าจอ Interactive Swagger UI (`http://127.0.0.1:8000/docs`)
 
----
+![หน้าต่าง Interactive Swagger UI](backend/sandbox/screenshots/screenshot_swagger_ui.png)
 
-### 📷 ช่องว่างวางรูปภาพที่ 1: หน้าจอ Interactive Swagger UI (`http://127.0.0.1:8000/docs`)
-```text
-+-----------------------------------------------------------------------------------+
-| [ วางรูปภาพที่ 1: ภาพหน้าจอ Swagger UI (http://127.0.0.1:8000/docs) ]            |
-| - แสดงหัวข้อ "AI Ecosystem Enterprise Web API"                                  |
-| - แสดงรายการ API Tags ทั้ง 7 โดเมนงานอย่างครบถ้วน                                    |
-+-----------------------------------------------------------------------------------+
-```
 * **คำอธิบาย:** แสดงหน้าต่างอินเทอร์เฟซ Interactive Swagger UI ผ่าน URL `http://127.0.0.1:8000/docs` แสดงรายการหมวดหมู่ Endpoints ทั้ง 7 โดเมนงาน พร้อมรายละเอียด Tag Metadata สำหรับทดสอบยิง API แบบ Real-time
 
 ---
 
-### 📷 ช่องว่างวางรูปภาพที่ 2: หน้าจอ ReDoc Documentation (`http://127.0.0.1:8000/redoc`)
-```text
-+-----------------------------------------------------------------------------------+
-| [ วางรูปภาพที่ 2: ภาพหน้าจอ ReDoc Documentation (http://127.0.0.1:8000/redoc) ]  |
-| - แสดงหน้าเอกสาร ReDoc แบบ Read-only พร้อมแถบเมนูนำทางด้านซ้าย                        |
-+-----------------------------------------------------------------------------------+
-```
+### 7.2 ภาพหน้าจอ ReDoc Documentation (`http://127.0.0.1:8000/redoc`)
+
+![หน้าต่าง ReDoc Documentation](backend/sandbox/screenshots/screenshot_redoc_ui.png)
+
 * **คำอธิบาย:** แสดงหน้าเอกสาร ReDoc ผ่าน URL `http://127.0.0.1:8000/redoc` ในรูปแบบ Clean & Read-only Documentation สำหรับใช้เป็นคู่มืออ้างอิงสเปก API มาตรฐานสำหรับนักพัฒนาระบบ
 
 ---
 
-### 📷 ช่องว่างวางรูปภาพที่ 3: หน้าจอ OpenAPI JSON Specification (`http://127.0.0.1:8000/api/v1/openapi.json`)
-```text
-+-----------------------------------------------------------------------------------+
-| [ วางรูปภาพที่ 3: ภาพหน้าจอ openapi.json (http://127.0.0.1:8000/api/v1/openapi.json) ]|
-| - แสดงโครงสร้างข้อกำหนด OpenAPI Spec v3.1.0 ในรูปแบบ JSON Raw Data               |
-+-----------------------------------------------------------------------------------+
-```
+### 7.3 ภาพหน้าจอ OpenAPI Specification JSON (`http://127.0.0.1:8000/api/v1/openapi.json`)
+
+![หน้าต่าง OpenAPI Specification JSON](backend/sandbox/screenshots/screenshot_openapi_json.png)
+
 * **คำอธิบาย:** แสดงผลลัพธ์โครงสร้าง JSON สเปกมาตรฐาน OpenAPI v3.1.0 ที่เซิร์ฟเวอร์สกัดสร้างขึ้นจาก Type Hints สำหรับนำไปใช้สร้าง Client Code อัตโนมัติ
 
 ---
 
-### 📷 ช่องว่างวางรูปภาพที่ 4: หน้าจอ Health Check Response (`http://127.0.0.1:8000/api/v1/system/health`)
-```text
-+-----------------------------------------------------------------------------------+
-| [ วางรูปภาพที่ 4: ภาพหน้าจอ Health Check Response ]                               |
-| - แสดงผลตอบกลับ JSON {"status": "healthy", ...} ของ PostgreSQL, MinIO, Redis      |
-+-----------------------------------------------------------------------------------+
-```
-* **คำอธิบาย:** ผลลัพธ์การตรวจสอบสุขภาพระบบผ่าน Endpoint `/api/v1/system/health` สำหรับทดสอบว่า FastAPI และคอนเทนเนอร์ฐานข้อมูลส่วนหลังเปิดทำงานปกติ
+### 7.4 ภาพหน้าจอ Health Check Response (`http://127.0.0.1:8000/api/v1/system/health`)
+
+![หน้าต่าง Health Check Response](backend/sandbox/screenshots/screenshot_health_check.png)
+
+* **คำอธิบาย:** ผลลัพธ์การตรวจสอบสุขภาพระบบผ่าน Endpoint `/api/v1/system/health` สำหรับทดสอบว่า FastAPI และคอนเทนเนอร์ฐานข้อมูลส่วนหลัง (PostgreSQL, MinIO, Redis) เปิดทำงานปกติ
 
 ---
 
-### 📷 ช่องว่างวางรูปภาพที่ 5: หน้าจอไฟล์ Snapshot `api_list_snapshot.xlsx` ที่สกัดได้จริง
-```text
-+-----------------------------------------------------------------------------------+
-| [ วางรูปภาพที่ 5: ภาพหน้าจอไฟล์ api_list_snapshot.xlsx ในโปรแกรม Excel ]          |
-| - แสดงตารางข้อมูล API List ที่ตกแต่งด้วยสีส่วนหัวและสี HTTP Verb สวยงาม                 |
-+-----------------------------------------------------------------------------------+
-```
-* **คำอธิบาย:** ผลลัพธ์การสกัดรายการ API ออกเป็นไฟล์สเปรดชีต Excel (`api_list_snapshot.xlsx`) ที่ถูกสร้างขึ้นจริงจากการรันสคริปต์ `scripts/export_openapi_excel.py`
+### 7.5 ภาพหน้าจอไฟล์ Snapshot `api_list_snapshot.xlsx` ที่สกัดได้จริงในโปรแกรม Excel
+
+![ภาพหน้าจอไฟล์ Snapshot api_list_snapshot.xlsx](backend/sandbox/screenshots/screenshot_excel_snapshot.png)
+
+* **คำอธิบาย:** ผลลัพธ์การสกัดรายการ API ออกเป็นไฟล์สเปรดชีต Excel (`api_list_snapshot.xlsx`) ที่ถูกสร้างขึ้นจริงจากการรันสคริปต์ `scripts/export_openapi_excel.py` เปิดแสดงผลในโปรแกรม Microsoft Excel
 
 ---
 

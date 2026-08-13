@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response, status
 from app.schemas.system_schema import HealthCheckResponse
 
-router = APIRouter(prefix="/system", tags=["6. System Monitoring & Health Domain"])
+router = APIRouter(prefix="/system", tags=["7. System Monitoring & Health Domain"])
 
 @router.get("/health", response_model=HealthCheckResponse)
 async def system_health_check(response: Response):

@@ -21,7 +21,7 @@ Returns HTTP 202 Accepted immediately with job_id. Task pushed to Redis Queue.",
 request_body (application/json)","200, 422"
 6. Label Studio Component Domain,/api/v1/ls/annotations/export,GET,Export Labeled Annotations,Export completed data annotations from Label Studio to PostgreSQL/MinIO,"project_id (query, integer, Required)
 export_format (query, string, Optional)","200, 422"
-6. System Monitoring & Health Domain,/api/v1/system/health,GET,System Health Check,"System Health Check endpoint for Container Orchestration (Docker/Kubernetes).
+7. System Monitoring & Health Domain,/api/v1/system/health,GET,System Health Check,"System Health Check endpoint for Container Orchestration (Docker/Kubernetes).
 PING test for PostgreSQL, MinIO, and Redis. Returns 200 OK or 503 Service Unavailable.",None,200
-6. System Monitoring & Health Domain,/api/v1/system/logs,GET,Get System Logs,Retrieve machine-readable Structured JSON Logs.,None,200
+7. System Monitoring & Health Domain,/api/v1/system/logs,GET,Get System Logs,Retrieve machine-readable Structured JSON Logs.,None,200
 7. System Monitoring & Health Domain,/,GET,Root Health Status,,None,200
