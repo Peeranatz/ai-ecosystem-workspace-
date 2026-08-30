@@ -1,0 +1,25 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv package manager
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+# Copy dependency specifications
+COPY pyproject.toml uv.lock ./
+
+# Install project dependencies
+RUN uv sync --frozen --no-cache
+
+# Copy application source code
+COPY . .
+
+# Start Trainer Worker process
+CMD ["uv", "run", "python", "worker.py"]

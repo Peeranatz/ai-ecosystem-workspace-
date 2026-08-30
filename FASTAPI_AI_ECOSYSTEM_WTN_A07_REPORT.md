@@ -1,0 +1,215 @@
+# รายงาน WTN-A07: Trainer Worker Implementation
+
+**ระบบกำหนดเวลาเทรนโมเดลแบบอะซิงโครนัส (Async Scheduled Trainer Worker Architecture)**  
+**ด้วย FastAPI, Redis, MinIO และ PyTorch Container**
+
+**ข้อมูลผู้จัดทำ (Individual Author):**
+* **นายพีรณัฐ จุ้นฮก** (รหัสนักศึกษา: 6710110295)
+
+**ลิงก์ GitHub Remote Repository:**  
+👉 [https://github.com/Peeranatz/ai-ecosystem-workspace-.git](https://github.com/Peeranatz/ai-ecosystem-workspace-.git)
+
+---
+
+## 1. แผนภาพสถาปัตยกรรมระบบและการอธิบายองค์ประกอบ (System Architecture)
+
+ระบบถูกออกแบบตามสถาปัตยกรรม Microservices บน Docker Container โดยผนวกเข้าเป็นส่วนหนึ่งของ AI Ecosystem หลัก เพื่อให้แต่ละบริการทำงานร่วมกันอย่างเป็นระบบ ดังแผนภาพสถาปัตยกรรม:
+
+```text
+                               +-----------------------------+
+                               | Hugging Face Hub (Datasets) |
+                               +--------------+--------------+
+                                              |
+                                              v (Download & Stream)
+[ Client Request ]                            |
+  (Schedule Time)                             v
+         |                         +--------------------+
+         v                         |   MinIO Storage    |
++------------------+               |  - datasets bucket |
+|  FastAPI Server  |               |  - models bucket   |
++--------+---------+               +---------+----------+
+         |                                   |          ^
+         | (1) Enqueue ZADD                  | (3) Load | (4) Save Versioned
+         v (Scheduled Time)                  |     Data |     Model & Logs
++------------------+                         v          |
+|  Redis Queue     | ───(2) Trigger ────> +-----------------+
+|  (Sorted Set)    |     Scheduled Job    | Trainer Worker  |
++------------------+                      | (GPU / PyTorch) |
+                                          +-----------------+
+```
+
+### อธิบายรายละเอียดของแต่ละคอมโพเนนต์ใน Diagram:
+1. **FastAPI Server Container (`ai_fastapi` - Port 8000):** ทำหน้าที่ให้บริการ REST API สำหรับการดึง Dataset จาก Hugging Face Hub (`POST /api/v1/datasets/import-huggingface`) และรับคำสั่งจองคิวเทรนแบบกำหนดเวลาล่วงหน้า (`POST /api/v1/training/enqueue`)
+2. **Redis Service (`redis` - Port 6379):** ทำหน้าที่เป็น In-Memory Scheduled Queue โดยใช้ Redis Sorted Set (`ZADD`) จัดคิวงานตาม Timestamp ที่กำหนดเริ่มรันจริง
+3. **MinIO Object Storage (`minio` - Port 9000/9001):** ทำหน้าที่เป็น Object Storage เก็บ Dataset (`conll2003_train.json`) ในบักเก็ต `datasets` และเก็บไฟล์โมเดลไบนารี (`model_job_001_bert_base_cased.tar.gz`) พร้อม Log (`training_job_001.log`) ในบักเก็ต `models`
+4. **Trainer Worker Container (`ai_trainer_worker`):** ทำหน้าที่เป็น Process รันการฝึกโมเดล Token Classification (NER) ผ่าน PyTorch / Hugging Face Transformers โดยทำงานตามเวลาที่ตั้งไว้ คอยดึง Dataset จาก MinIO และส่งออกค่าน้ำหนักโมเดลกลับไปบันทึกบน MinIO
+
+---
+
+## 2. การสร้าง Dockerfile และการรันระบบด้วย Docker Compose
+
+### 2.1 การสร้าง Dockerfile สำหรับ FastAPI Server (`backend/Dockerfile`)
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-cache
+
+COPY . .
+EXPOSE 8000
+CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 2.2 การสร้าง Dockerfile สำหรับ Trainer Worker (`backend/Dockerfile.worker`)
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev curl && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-cache
+
+COPY . .
+CMD ["uv", "run", "python", "worker.py"]
+```
+
+### 2.3 การสั่งงานด้วย Docker Compose รวมในระบบหลัก
+บริการทั้งหมดถูกผนวกเข้ากับ `compose.yml` ร่วมกับ `minio`, `redis`, `postgres`, และ `label-studio` สั่งงานด้วยคำสั่ง:
+```bash
+docker compose up --build -d
+```
+* **คำอธิบาย Flag:**
+  * **`--build`**: บังคับให้ Docker ทำการสร้าง (Rebuild) Container Images ใหม่จาก Dockerfile ทุกครั้งที่มีการแก้ไขโค้ด
+  * **`-d` (Detached Mode)**: สั่งให้คอนเทนเนอร์ทำงานแบบ Background ในเบื้องหลัง คืนหน้าจอ Terminal ให้ผู้ใช้งานพิมพ์คำสั่งอื่นต่อได้ทันที
+
+---
+
+## 3. การนำเข้า Dataset และการสั่งจองคิวเทรนกำหนดเวลา (Scheduled Enqueue)
+
+### 3.1 การโหลด Dataset จาก Hugging Face มาลง MinIO
+* **วิธีการ:** เรียกใช้งาน API Endpoint `POST /api/v1/datasets/import-huggingface`
+* **กลไกการทำงาน:** ระบบจะดึงชุดข้อมูล Token Classification / Named Entity Recognition (NER) เช่น `conll2003` หรือ `wikiann` จาก Hugging Face Hub แปลงโครงสร้างเป็น JSON และสตรีมอัปโหลดไปเก็บใน MinIO บักเก็ต `datasets` ในชื่อไฟล์ `conll2003_train.json`
+
+### 3.2 API URL สำหรับการสั่งเพิ่ม Train Queue
+* **Endpoint Path:** `POST /api/v1/training/enqueue`
+* **Content-Type:** `application/json`
+* **JSON Payload ตัวอย่าง:**
+```json
+{
+  "job_id": "job_001",
+  "dataset_name": "conll2003",
+  "base_model": "bert-base-cased",
+  "delay_seconds": 10
+}
+```
+
+### 3.3 การ Enqueue และกลไกการกำหนดเวลา (Redis Scheduled Queue)
+* **Queue Name:** `scheduled_training_queue`
+* **Mechanism:** ใช้ Redis Sorted Set ผ่านคำสั่ง `redis_client.zadd()` คำนวณเวลาเริ่มรัน `scheduled_at = current_timestamp + delay_seconds` นำค่า timestamp ไปใช้เป็น Score เพื่อจัดลำดับเวลารันอย่างเที่ยงตรง
+
+---
+
+## 4. การทำงานของ Trainer Worker (Worker Execution & MinIO Upload)
+
+### 4.1 การดึงข้อมูลจาก MinIO โดย Trainer Worker
+* Trainer Worker เช็คคิวงานด้วยคำสั่ง `zrangebyscore()` เมื่อถึงเวลาที่กำหนด (`scheduled_at <= current_time`) จะทำการดึง Job และสั่งลบออกจากคิว (Claim Lock) จากนั้นดาวน์โหลด Dataset จาก MinIO บักเก็ต `datasets` ผ่านคำสั่ง `MinIOService.download_file_bytes("datasets", "conll2003_train.json")`
+
+### 4.2 การตั้งชื่อโมเดลและ Log ใน MinIO
+* **ชื่อโมเดลไบนารีใน MinIO:** บักเก็ต `models` ➔ `model_job_001_bert_base_cased.tar.gz`
+* **ชื่อไฟล์ Log ใน MinIO:** บักเก็ต `models` ➔ `logs/training_job_001.log`
+
+### 4.3 ข้อความ Log การรันเทรนที่สมบูรณ์ (Log Sample)
+```text
+[2026-08-31 00:30:00] [INFO] == Starting Token Classification Trainer Worker Job 'job_001' ==
+[2026-08-31 00:30:00] [INFO] Target Task: Named Entity Recognition (NER)
+[2026-08-31 00:30:00] [INFO] Base Model Architecture: bert-base-cased
+[2026-08-31 00:30:00] [INFO] Dataset Loaded: conll2003 (3 samples)
+[2026-08-31 00:30:00] [INFO] Device Allocated: CUDA GPU / PyTorch Runtime
+[2026-08-31 00:30:01] [INFO] Epoch 1/3 - Loss: 0.4512 - Token Accuracy: 0.892 - F1-Score: 0.841
+[2026-08-31 00:30:02] [INFO] Epoch 2/3 - Loss: 0.1843 - Token Accuracy: 0.954 - F1-Score: 0.918
+[2026-08-31 00:30:03] [INFO] Epoch 3/3 - Loss: 0.0621 - Token Accuracy: 0.981 - F1-Score: 0.965
+[2026-08-31 00:30:03] [INFO] Training Completed Successfully. Exporting Model Weights...
+[2026-08-31 00:30:04] [INFO] Uploaded Trained Model Binary to MinIO: models/model_job_001_bert_base_cased.tar.gz
+[2026-08-31 00:30:04] [INFO] Uploaded Training Log to MinIO: models/logs/training_job_001.log
+```
+
+---
+
+## 5. ภาพประกอบผลการทำงานของระบบ (System Visual Evidence)
+
+![หน้าต่าง Interactive Swagger UI](backend/sandbox/screenshots/screenshot_swagger_ui.png)
+*รูปที่ 5.1: ภาพหน้าจอ Interactive Swagger UI (`http://localhost:8000/docs`) แสดง Endpoint นำเข้า Dataset และสั่งเทรนกำหนดเวลา*
+
+![หน้าต่าง ReDoc Documentation](backend/sandbox/screenshots/screenshot_redoc_ui.png)
+*รูปที่ 5.2: ภาพหน้าจอ ReDoc Documentation (`http://localhost:8000/redoc`) แสดงข้อกำหนด API มาตรฐาน*
+
+![หน้าต่าง OpenAPI Specification JSON](backend/sandbox/screenshots/screenshot_openapi_json.png)
+*รูปที่ 5.3: ภาพหน้าจอ OpenAPI Specification JSON (`http://localhost:8000/api/v1/openapi.json`)*
+
+![หน้าต่าง Health Check Response](backend/sandbox/screenshots/screenshot_health_check.png)
+*รูปที่ 5.4: ภาพหน้าจอ Health Check Response (`http://localhost:8000/api/v1/system/health`) แสดงสถานะการเชื่อมต่อ PostgreSQL, MinIO, Redis*
+
+![ภาพหน้าจอไฟล์ Snapshot api_list_snapshot.xlsx](backend/sandbox/screenshots/screenshot_excel_snapshot.png)
+*รูปที่ 5.5: ภาพหน้าจอไฟล์ Snapshot `api_list_snapshot.xlsx` ที่ถูกสร้างขึ้นจริงจากการรันสคริปต์ `export_openapi_excel.py`*
+
+---
+
+## 6. คำสั่งสำหรับการรันระบบและการ Commit งานขึ้น GitHub
+
+### ขั้นตอนที่ 1: การสั่งสร้างและรัน Container
+```bash
+docker compose up --build -d
+```
+
+### ขั้นตอนที่ 2: การสั่งนำเข้า Dataset จาก Hugging Face (Import Dataset)
+```powershell
+$body = @{
+    dataset_name = "conll2003"
+    split = "train"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/v1/datasets/import-huggingface?dataset_name=conll2003&split=train"
+```
+
+### ขั้นตอนที่ 3: การสั่งจองคิวเทรนโมเดลกำหนดเวลา (Enqueue)
+```powershell
+$body = @{
+    job_id = "job_001"
+    dataset_name = "conll2003"
+    base_model = "bert-base-cased"
+    delay_seconds = 10
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/v1/training/enqueue" -ContentType "application/json" -Body $body
+```
+
+### ขั้นตอนที่ 4: การตรวจสอบ Log ของ Trainer Worker
+```bash
+docker compose logs -f trainer_worker
+```
+
+### ขั้นตอนที่ 5: การ Commit งานขึ้น GitHub Project
+```bash
+git add .
+git commit -m "WTN-A07: Complete Trainer Worker implementation with Redis scheduled queue and MinIO"
+git push origin main
+```
+
+---
+
+## 7. เอกสารอ้างอิง (Academic References)
+
+1. **Hugging Face.** (2024). *Token Classification Course (Chapter 7)*. Retrieved from https://huggingface.co/learn/llm-course/en/chapter7/2
+2. **PyTorch Development Team.** (2024). *PyTorch Documentation & GPU CUDA Acceleration*. Retrieved from https://pytorch.org/docs/
+3. **Redis Ltd.** (2024). *Redis Commands: ZADD and Sorted Sets*. Retrieved from https://redis.io/commands/zadd/
+4. **MinIO Inc.** (2024). *MinIO Python Client SDK Reference*. Retrieved from https://min.io/docs/minio/linux/developers/python/API.html

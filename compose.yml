@@ -3,23 +3,18 @@ services:
     image: redis:8.8.0-alpine
     container_name: redis
     restart: unless-stopped
-
     ports:
       - "6379:6379"
-
     volumes:
       - redis-data:/data
-
     command: >
       redis-server
       --appendonly yes
-
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -97,6 +92,54 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  fastapi:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai_fastapi
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  trainer_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: ai_trainer_worker
+    restart: unless-stopped
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - MINIO_ENDPOINT=minio:9000
+    depends_on:
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   redis-data:
