@@ -1,7 +1,7 @@
-# รายงาน WTN-A07: Trainer Worker Implementation
+# รายงาน WTN-A07: Trainer Worker Implementation (ฉบับเชิงลึกสมบูรณ์)
 
 **ระบบกำหนดเวลาเทรนโมเดลแบบอะซิงโครนัส (Async Scheduled Trainer Worker Architecture)**  
-**ด้วย FastAPI, Redis, MinIO และ PyTorch Container**
+**ด้วย FastAPI, Redis Scheduled Queue, MinIO Object Storage และ PyTorch Container Execution**
 
 **ข้อมูลผู้จัดทำ (Individual Author):**
 * **นายพีรณัฐ จุ้นฮก** (รหัสนักศึกษา: 6710110295)
@@ -11,25 +11,41 @@
 
 ---
 
-## 1. แผนภาพสถาปัตยกรรมระบบและการอธิบายองค์ประกอบ (System Architecture)
+## 1. แผนภาพสถาปัตยกรรมระบบและการอธิบายองค์ประกอบเชิงลึก (System Architecture & Component Mechanics)
 
-ระบบถูกออกแบบตามสถาปัตยกรรม Microservices บน Docker Container โดยรวมอยู่ใน AI Ecosystem หลัก เพื่อให้แต่ละบริการทำงานร่วมกันอย่างเป็นระบบ ดังแผนภาพสถาปัตยกรรม:
+ระบบถูกออกแบบตามหลักการ **Cloud-Native Microservices** บน Docker Container โดยแยกการทำงานระหว่างบริการรับคำขอ (API Gateway Layer), บริการจัดการคิวงาน (In-Memory Queue Layer), บริการจัดเก็บข้อมูล (Object Storage Layer) และบริการประมวลผลเทรนโมเดล (Compute Worker Layer) อย่างเด็ดขาด (Decoupled Architecture)
 
 ![แผนภาพสถาปัตยกรรมระบบ System Architecture Diagram](backend/sandbox/screenshots/system_architecture_wtn_a07.png)
 *รูปที่ 1.1: แผนภาพสถาปัตยกรรมระบบ (FastAPI, Redis Queue, MinIO Storage และ Trainer Worker GPU)*
 
 ### อธิบายรายละเอียดของแต่ละคอมโพเนนต์ใน Diagram:
-1. **FastAPI Server Container (`ai_fastapi` - Port 8000):** ทำหน้าที่ให้บริการ REST API สำหรับการดึง Dataset จาก Hugging Face Hub (`POST /api/v1/datasets/import-huggingface`) และรับคำสั่งจองคิวเทรนแบบกำหนดเวลาล่วงหน้า (`POST /api/v1/training/enqueue`)
-2. **Redis Service (`redis` - Port 6379):** ทำหน้าที่เป็น In-Memory Scheduled Queue โดยใช้ Redis Sorted Set (`ZADD`) จัดคิวงานตาม Timestamp ที่กำหนดเริ่มรันจริง
-3. **MinIO Object Storage (`minio` - Port 9000/9001):** ทำหน้าที่เป็น Object Storage เก็บ Dataset (`conll2003_train.json`) ในบักเก็ต `datasets` และเก็บไฟล์โมเดลไบนารี (`model_job_001_bert_base_cased.tar.gz`) พร้อม Log (`training_job_001.log`) ในบักเก็ต `models`
-4. **Trainer Worker Container (`ai_trainer_worker`):** ทำหน้าที่เป็น Process รันการฝึกโมเดล Token Classification (NER) ผ่าน PyTorch / Hugging Face Transformers โดยทำงานตามเวลาที่ตั้งไว้ คอยดึง Dataset จาก MinIO และส่งออกค่าน้ำหนักโมเดลกลับไปบันทึกบน MinIO
+
+1. **FastAPI Server Container (`ai_fastapi` - Port 8000):**
+   * **บทบาท:** ทำหน้าที่เป็น REST API Gateway สำหรับรับ HTTP Requests จากภายนอก
+   * **หน้าที่หลัก:**
+     - ให้บริการ Endpoint `POST /api/v1/datasets/import-huggingface` เพื่อเชื่อมต่อและดึงชุดข้อมูลจาก Hugging Face Hub เข้ามาบันทึกบน MinIO
+     - ให้บริการ Endpoint `POST /api/v1/training/enqueue` เพื่อรับพารามิเตอร์การจองคิวเทรน เช่น `job_id`, `base_model`, `delay_seconds` แล้วเขียนข้อมูลบรรจุลงคิว Redis
+
+2. **Redis Service (`redis` - Port 6379):**
+   * **บทบาท:** ทำหน้าที่เป็น In-Memory Scheduled Queue สำหรับจัดลำดับงานที่ต้องประมวลผลล่วงหน้า
+   * **กลไกเชิงลึก:** ใช้โครงสร้างข้อมูลชนิด **Redis Sorted Set (`ZADD`)** โดยกำหนดให้ค่า Unix Timestamp เป้าหมาย (`scheduled_at`) ทำหน้าที่เป็น **Score** เพื่อเรียงลำดับคิวจากเวลาที่ต้องเริ่มรันก่อนไปหลัง
+
+3. **MinIO Object Storage (`minio` - Port 9000/9001):**
+   * **บทบาท:** ทำหน้าที่เป็น Centralized Object Storage (S3 API Compatible) จัดเก็บข้อมูลที่จำเป็นทั้งหมดของระบบ
+   * **โครงสร้างการเก็บบักเก็ต:**
+     - **บักเก็ต `datasets`:** จัดเก็บไฟล์ชุดข้อมูลดิบที่ดาวน์โหลดมาจาก Hugging Face ในรูปแบบไฟล์ JSON เช่น `conll2003_train.json`
+     - **บักเก็ต `models`:** จัดเก็บไฟล์ค่าน้ำหนักโมเดลไบนารีที่ฝึกสำเร็จแล้ว เช่น `model_job_001_bert_base_cased.tar.gz` พร้อมทั้งไฟล์ Log การเทรนในโฟลเดอร์ `logs/training_job_001.log`
+
+4. **Trainer Worker Container (`ai_trainer_worker`):**
+   * **บทบาท:** ทำหน้าที่เป็น Background Compute Worker ที่รันอย่างเป็นอิสระ (Background Daemon)
+   * **กลไกเชิงลึก:** คอยคิวเร่งดึงงานจาก Redis แบบ Polling Loop เมื่อถึงเวลาเริ่มรัน ทำการดาวน์โหลด Dataset จาก MinIO มา Fine-tune โมเดล Token Classification (NER) ผ่าน PyTorch / Hugging Face Transformers บน GPU/CPU แล้วสตรีมไฟล์โมเดลไบนารีและ Log กลับไปบันทึกบน MinIO
 
 ---
 
 ## 2. การสร้าง Dockerfile และการรันระบบด้วย Docker Compose
 
 ### 2.1 การสร้าง Dockerfile สำหรับ FastAPI Server (`backend/Dockerfile`)
-ใช้ Base Image `python:3.12-slim` และจัดการ Package ด้วย `uv` เพื่อให้การ Build Container รวดเร็วและมีขนาดเล็ก
+ใช้ Base Image `python:3.12-slim` และใช้ `uv` เป็น Package Manager เพื่อให้การสตรีม Build Container รวดเร็วและมีขนาดเบาที่สุด
 ```dockerfile
 FROM python:3.12-slim
 
@@ -48,7 +64,7 @@ CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "800
 ```
 
 ### 2.2 การสร้าง Dockerfile สำหรับ Trainer Worker (`backend/Dockerfile.worker`)
-ใช้ Base Image `python:3.12-slim` (หรือ `pytorch/pytorch` สำหรับเครื่องที่มี GPU CUDA) พร้อมติดตั้งไลบรารี `transformers`, `datasets`, `seqeval`, `minio`, และ `redis` เพื่อให้ Worker ประมวลผลเทรนโมเดลได้อย่างมีประสิทธิภาพ
+ติดตั้งไลบรารีทางด้าน Machine Learning ได้แก่ `torch`, `transformers`, `datasets`, `seqeval` ร่วมกับ `redis` และ `minio` สำหรับการประมวลผลเทรนโมเดล
 ```dockerfile
 FROM python:3.12-slim
 
@@ -65,22 +81,45 @@ COPY . .
 CMD ["uv", "run", "python", "worker.py"]
 ```
 
-### 2.3 การสั่งงานด้วย Docker Compose รวมในระบบหลัก
-บริการทั้งหมดถูกผนวกเข้ากับ `compose.yml` ร่วมกับ `minio`, `redis`, `postgres`, และ `label-studio` สั่งงานด้วยคำสั่ง:
+### 2.3 การส่งผ่าน GPU Acceleration (NVIDIA Container Toolkit)
+หากต้องการประมวลผลบนฮาร์ดแวร์ GPU CUDA สามารถเพิ่มการตั้งค่าทรัพยากรใน `compose.yml` ภายใต้บริการ `trainer_worker`:
+```yaml
+trainer_worker:
+  build:
+    context: .
+    dockerfile: Dockerfile.worker
+  environment:
+    - REDIS_HOST=redis
+    - MINIO_ENDPOINT=minio:9000
+  deploy:
+    resources:
+      reservations:
+        devices:
+          - driver: nvidia
+            count: all
+            capabilities: [gpu]
+```
+
+### 2.4 การรันด้วย Docker Compose
+บริการทั้งหมดสั่งงานรวมกันผ่านคำสั่ง:
 ```bash
 docker compose up --build -d
 ```
 * **คำอธิบาย Flag:**
-  * **`--build`**: บังคับให้ Docker ทำการสร้าง (Rebuild) Container Images ใหม่จาก Dockerfile ทุกครั้งที่มีการแก้ไขโค้ด
+  * **`--build`**: บังคับให้ Docker สร้าง (Rebuild) Container Images ใหม่จาก Dockerfile ป้องกันการใช้ Cache เก่าที่มีโค้ดตกรุ่น
   * **`-d` (Detached Mode)**: สั่งให้คอนเทนเนอร์ทำงานแบบ Background ในเบื้องหลัง คืนหน้าจอ Terminal ให้ผู้ใช้งานพิมพ์คำสั่งอื่นต่อได้ทันที
 
 ---
 
-## 3. การนำเข้า Dataset และการสั่งจองคิวเทรนกำหนดเวลา (Scheduled Enqueue)
+## 3. การนำเข้า Dataset และกลไก Redis Scheduled Queue เชิงลึก
 
 ### 3.1 การโหลด Dataset จาก Hugging Face มาลง MinIO
-* **วิธีการ:** เรียกใช้งาน API Endpoint `POST /api/v1/datasets/import-huggingface`
-* **กลไกการทำงาน:** ระบบจะดึงชุดข้อมูล Token Classification / Named Entity Recognition (NER) เช่น `conll2003` หรือ `wikiann` จาก Hugging Face Hub แปลงโครงสร้างเป็น JSON และสตรีมอัปโหลดไปเก็บใน MinIO บักเก็ต `datasets` ในชื่อไฟล์ `conll2003_train.json`
+* **Endpoint Path:** `POST /api/v1/datasets/import-huggingface`
+* **พารามิเตอร์ Query:** `dataset_name=conll2003`, `split=train`
+* **กลไกการทำงาน:**
+  1. FastAPI ดึงชุดข้อมูล Token Classification / Named Entity Recognition (NER) จาก Hugging Face Datasets Hub
+  2. แปลงโครงสร้างข้อมูลเป็น JSON Format ที่ประกอบด้วย `tokens` และ `ner_tags`
+  3. สตรีมอัปโหลดไปจัดเก็บยัง MinIO บักเก็ต `datasets` ในชื่อไฟล์ `conll2003_train.json`
 
 ### 3.2 API URL สำหรับการสั่งเพิ่ม Train Queue
 * **Endpoint Path:** `POST /api/v1/training/enqueue`
@@ -95,35 +134,52 @@ docker compose up --build -d
 }
 ```
 
-### 3.3 การ Enqueue และกลไกการกำหนดเวลา (Redis Scheduled Queue)
-* **Queue Name:** `scheduled_training_queue`
-* **Mechanism:** ใช้ Redis Sorted Set ผ่านคำสั่ง `redis_client.zadd()` คำนวณเวลาเริ่มรัน `scheduled_at = current_timestamp + delay_seconds` นำค่า timestamp ไปใช้เป็น Score เพื่อจัดลำดับเวลารันอย่างเที่ยงตรง
+### 3.3 กลไกการ Enqueue และโครงสร้าง Redis Scheduled Queue
+* **ชื่อ Queue ใน Redis:** `scheduled_training_queue`
+* **กลไกเชิงลึก (Atomic Scheduling):**
+  1. ระบบคำนวณเวลาเริ่มประมวลผลจริง: `scheduled_at = current_unix_timestamp + delay_seconds`
+  2. เรียกคำสั่ง `redis_client.zadd("scheduled_training_queue", {payload_json: scheduled_at})`
+  3. ค่า `scheduled_at` จะถูกนำไปใช้เป็น **Score** ใน Sorted Set ทำให้คิวงานถูกจัดเรียงตามลำดับเวลาอย่างแม่นยำ
 
 ---
 
-## 4. การทำงานของ Trainer Worker (Worker Execution & MinIO Upload)
+## 4. การทำงานของ Trainer Worker (Worker Mechanics, Token Classification & Upload)
 
-### 4.1 การดึงข้อมูลจาก MinIO โดย Trainer Worker
-* Trainer Worker เช็คคิวงานด้วยคำสั่ง `zrangebyscore()` เมื่อถึงเวลาที่กำหนด (`scheduled_at <= current_time`) จะทำการดึง Job และสั่งลบออกจากคิว (Claim Lock) จากนั้นดาวน์โหลด Dataset จาก MinIO บักเก็ต `datasets` ผ่านคำสั่ง `MinIOService.download_file_bytes("datasets", "conll2003_train.json")`
+### 4.1 การดึงข้อมูลแบบ Atomic Lock ป้องกัน Worker แย่งงานกัน (Concurrency Control)
+เพื่อรองรับกรณีที่มี Trainer Worker รันพร้อมกันหลายตัว (Horizontal Scaling) การดึงงานจากคิวจะทำผ่านกลไก Atomic Claim Lock:
+```python
+# 1. ค้นหางานที่ถึงเวลาเริ่มรันแล้ว (score <= current_timestamp)
+ready_jobs = redis_client.zrangebyscore("scheduled_training_queue", 0, current_timestamp, start=0, num=1)
 
-### 4.2 การตั้งชื่อโมเดลและ Log ใน MinIO
-* **ชื่อโมเดลไบนารีใน MinIO:** บักเก็ต `models` ➔ `model_job_001_bert_base_cased.tar.gz`
-* **ชื่อไฟล์ Log ใน MinIO:** บักเก็ต `models` ➔ `logs/training_job_001.log`
-
-### 4.3 ข้อความ Log การรันเทรนที่สมบูรณ์ (Log Sample)
-```text
-[2026-08-31 00:30:00] [INFO] == Starting Token Classification Trainer Worker Job 'job_001' ==
-[2026-08-31 00:30:00] [INFO] Target Task: Named Entity Recognition (NER)
-[2026-08-31 00:30:00] [INFO] Base Model Architecture: bert-base-cased
-[2026-08-31 00:30:00] [INFO] Dataset Loaded: conll2003 (3 samples)
-[2026-08-31 00:30:00] [INFO] Device Allocated: CUDA GPU / PyTorch Runtime
-[2026-08-31 00:30:01] [INFO] Epoch 1/3 - Loss: 0.4512 - Token Accuracy: 0.892 - F1-Score: 0.841
-[2026-08-31 00:30:02] [INFO] Epoch 2/3 - Loss: 0.1843 - Token Accuracy: 0.954 - F1-Score: 0.918
-[2026-08-31 00:30:03] [INFO] Epoch 3/3 - Loss: 0.0621 - Token Accuracy: 0.981 - F1-Score: 0.965
-[2026-08-31 00:30:03] [INFO] Training Completed Successfully. Exporting Model Weights...
-[2026-08-31 00:30:04] [INFO] Uploaded Trained Model Binary to MinIO: models/model_job_001_bert_base_cased.tar.gz
-[2026-08-31 00:30:04] [INFO] Uploaded Training Log to MinIO: models/logs/training_job_001.log
+if ready_jobs:
+    job_payload = ready_jobs[0]
+    # 2. ปลดล็อคคิวแบบ Atomic ด้วย ZREM เพื่อรับประกันว่ามี Worker เพียงตัวเดียวที่ได้งานนี้ไปทำ
+    if redis_client.zrem("scheduled_training_queue", job_payload):
+        # ดำเนินการเทรนโมเดล...
 ```
+
+### 4.2 รายละเอียดงาน Token Classification (Named Entity Recognition - NER) & BIO Tagging Scheme
+โมเดลที่ Worker ทำการ Fine-tune เป็นงานจำแนกประเภทเอนทิตีระดับคำ (Token-level Classification) ตามมาตรฐาน BIO Tagging Scheme:
+* **`B-PER` / `I-PER`:** Beginning / Inside Person Name (ชื่อบุคคล)
+* **`B-ORG` / `I-ORG`:** Beginning / Inside Organization Name (ชื่อองค์กร)
+* **`B-LOC` / `I-LOC`:** Beginning / Inside Location Name (ชื่อสถานที่)
+* **`O`:** Outside Entity (คำทั่วไป)
+
+**กระบวนการ Fine-Tuning ใน PyTorch:**
+1. Worker โหลด Base Architecture `bert-base-cased` จาก Hugging Face Transformers
+2. ดาวน์โหลด `conll2003_train.json` จาก MinIO บักเก็ต `datasets` ผ่านคำสั่ง `MinIOService.download_file_bytes()`
+3. คำนวณ Loss Function ด้วย **CrossEntropyLoss** บน Logits ของแต่ละ Token ร่วมกับ **AdamW Optimizer**
+4. ประเมินผลประสิทธิภาพโมเดลด้วยค่า **Token Accuracy** และ **F1-Score** (ใช้ไลบรารี `seqeval`)
+
+### 4.3 โครงสร้างการตั้งชื่อโมเดลและ Log ใน MinIO Object Storage
+เมื่อฝึกโมเดลเสร็จสิ้น Worker จะทำการแพ็กไฟล์ค่าน้ำหนักโมเดล (`pytorch_model.bin` / `model.safetensors`, `config.json`, `tokenizer.json`) บีบอัดเป็นไฟล์ Tarball และอัปโหลดไปยัง MinIO:
+* **ชื่อไฟล์โมเดลไบนารีใน MinIO:** บักเก็ต `models` ➔ `model_{job_id}_{base_model}.tar.gz`  
+  *(ตัวอย่าง: `model_job_001_bert_base_cased.tar.gz`)*
+* **ชื่อไฟล์ Log ใน MinIO:** บักเก็ต `models` ➔ `logs/training_{job_id}.log`  
+  *(ตัวอย่าง: `logs/training_job_001.log`)*
+
+### 4.4 ระบบ Fault Tolerance & Error Handling
+หากการเทรนเกิดข้อผิดพลาด (เช่น MinIO ขัดข้อง หรือ CUDA Out Of Memory - OOM) ระบบจะ Catch Exception บันทึก Stack Trace ลงไฟล์ Log อัปโหลดขึ้น MinIO เพื่อให้นักพัฒนาสามารถเข้ามาตรวจสอบย้อนหลังได้ทันที
 
 ---
 
@@ -199,7 +255,8 @@ git push origin main
 
 ## 7. เอกสารอ้างอิง (Academic References)
 
-1. **Hugging Face.** (2024). *Token Classification Course (Chapter 7)*. Retrieved from https://huggingface.co/learn/llm-course/en/chapter7/2
+1. **Hugging Face.** (2024). *Token Classification Course (Chapter 7: Named Entity Recognition)*. Retrieved from https://huggingface.co/learn/llm-course/en/chapter7/2
 2. **PyTorch Development Team.** (2024). *PyTorch Documentation & GPU CUDA Acceleration*. Retrieved from https://pytorch.org/docs/
-3. **Redis Ltd.** (2024). *Redis Commands: ZADD and Sorted Sets*. Retrieved from https://redis.io/commands/zadd/
-4. **MinIO Inc.** (2024). *MinIO Python Client SDK Reference*. Retrieved from https://min.io/docs/minio/linux/developers/python/API.html
+3. **Redis Ltd.** (2024). *Redis Commands: ZADD, ZRANGEBYSCORE and Atomic Queue Patterns*. Retrieved from https://redis.io/commands/zadd/
+4. **MinIO Inc.** (2024). *MinIO Python Client SDK & S3 Compatible Object Storage Reference*. Retrieved from https://min.io/docs/minio/linux/developers/python/API.html
+5. **NVIDIA Corporation.** (2024). *NVIDIA Container Toolkit Documentation for Docker GPU Acceleration*. Retrieved from https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/
