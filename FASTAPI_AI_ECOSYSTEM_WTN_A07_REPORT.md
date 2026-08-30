@@ -13,29 +13,10 @@
 
 ## 1. แผนภาพสถาปัตยกรรมระบบและการอธิบายองค์ประกอบ (System Architecture)
 
-ระบบถูกออกแบบตามสถาปัตยกรรม Microservices บน Docker Container โดยผนวกเข้าเป็นส่วนหนึ่งของ AI Ecosystem หลัก เพื่อให้แต่ละบริการทำงานร่วมกันอย่างเป็นระบบ ดังแผนภาพสถาปัตยกรรม:
+ระบบถูกออกแบบตามสถาปัตยกรรม Microservices บน Docker Container โดยรวมอยู่ใน AI Ecosystem หลัก เพื่อให้แต่ละบริการทำงานร่วมกันอย่างเป็นระบบ ดังแผนภาพสถาปัตยกรรม:
 
 ```text
-                               +-----------------------------+
-                               | Hugging Face Hub (Datasets) |
-                               +--------------+--------------+
-                                              |
-                                              v (Download & Stream)
-[ Client Request ]                            |
-  (Schedule Time)                             v
-         |                         +--------------------+
-         v                         |   MinIO Storage    |
-+------------------+               |  - datasets bucket |
-|  FastAPI Server  |               |  - models bucket   |
-+--------+---------+               +---------+----------+
-         |                                   |          ^
-         | (1) Enqueue ZADD                  | (3) Load | (4) Save Versioned
-         v (Scheduled Time)                  |     Data |     Model & Logs
-+------------------+                         v          |
-|  Redis Queue     | ───(2) Trigger ────> +-----------------+
-|  (Sorted Set)    |     Scheduled Job    | Trainer Worker  |
-+------------------+                      | (GPU / PyTorch) |
-                                          +-----------------+
+[วางรูปภาพที่ 1: แผนภาพสถาปัตยกรรมระบบ System Architecture Diagram (แผนภาพแสดงการไหลของข้อมูลระหว่าง Client -> FastAPI -> Redis Queue -> Trainer Worker -> MinIO Storage -> Hugging Face)]
 ```
 
 ### อธิบายรายละเอียดของแต่ละคอมโพเนนต์ใน Diagram:
@@ -49,6 +30,7 @@
 ## 2. การสร้าง Dockerfile และการรันระบบด้วย Docker Compose
 
 ### 2.1 การสร้าง Dockerfile สำหรับ FastAPI Server (`backend/Dockerfile`)
+ใช้ Base Image `python:3.12-slim` และจัดการ Package ด้วย `uv` เพื่อให้การ Build Container รวดเร็วและมีขนาดเล็ก
 ```dockerfile
 FROM python:3.12-slim
 
@@ -67,6 +49,7 @@ CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "800
 ```
 
 ### 2.2 การสร้าง Dockerfile สำหรับ Trainer Worker (`backend/Dockerfile.worker`)
+ใช้ Base Image `python:3.12-slim` (หรือ `pytorch/pytorch` สำหรับเครื่องที่มี GPU CUDA) พร้อมติดตั้งไลบรารี `transformers`, `datasets`, `seqeval`, `minio`, และ `redis` เพื่อให้ Worker ประมวลผลเทรนโมเดลได้อย่างมีประสิทธิภาพ
 ```dockerfile
 FROM python:3.12-slim
 
@@ -147,20 +130,43 @@ docker compose up --build -d
 
 ## 5. ภาพประกอบผลการทำงานของระบบ (System Visual Evidence)
 
-![หน้าต่าง Interactive Swagger UI](backend/sandbox/screenshots/screenshot_swagger_ui.png)
-*รูปที่ 5.1: ภาพหน้าจอ Interactive Swagger UI (`http://localhost:8000/docs`) แสดง Endpoint นำเข้า Dataset และสั่งเทรนกำหนดเวลา*
+### 5.1 ภาพแสดงไฟล์ Dataset ใน MinIO Console
+```text
+[วางรูปภาพที่ 2: ภาพหน้าจอไฟล์ Dataset (conll2003_train.json) ในบักเก็ต datasets บน MinIO Console (http://localhost:9001)]
+```
+* **คำอธิบาย:** แสดงไฟล์ชุดข้อมูล `conll2003_train.json` ที่ถูกนำเข้าจาก Hugging Face และจัดเก็บอยู่ในบักเก็ต `datasets` บน MinIO Console
 
-![หน้าต่าง ReDoc Documentation](backend/sandbox/screenshots/screenshot_redoc_ui.png)
-*รูปที่ 5.2: ภาพหน้าจอ ReDoc Documentation (`http://localhost:8000/redoc`) แสดงข้อกำหนด API มาตรฐาน*
+---
 
-![หน้าต่าง OpenAPI Specification JSON](backend/sandbox/screenshots/screenshot_openapi_json.png)
-*รูปที่ 5.3: ภาพหน้าจอ OpenAPI Specification JSON (`http://localhost:8000/api/v1/openapi.json`)*
+### 5.2 ภาพแสดงไฟล์โมเดลไบนารีและ Log ใน MinIO Console
+```text
+[วางรูปภาพที่ 3: ภาพหน้าจอไฟล์โมเดล (model_job_001_bert_base_cased.tar.gz) และ Log ในบักเก็ต models บน MinIO Console]
+```
+* **คำอธิบาย:** แสดงไฟล์ค่าน้ำหนักโมเดล `model_job_001_bert_base_cased.tar.gz` และไฟล์ Log การเทรนในโฟลเดอร์ `logs/training_job_001.log` ที่ Trainer Worker เทรนเสร็จแล้วส่งขึ้นเก็บบน MinIO บักเก็ต `models`
 
-![หน้าต่าง Health Check Response](backend/sandbox/screenshots/screenshot_health_check.png)
-*รูปที่ 5.4: ภาพหน้าจอ Health Check Response (`http://localhost:8000/api/v1/system/health`) แสดงสถานะการเชื่อมต่อ PostgreSQL, MinIO, Redis*
+---
 
-![ภาพหน้าจอไฟล์ Snapshot api_list_snapshot.xlsx](backend/sandbox/screenshots/screenshot_excel_snapshot.png)
-*รูปที่ 5.5: ภาพหน้าจอไฟล์ Snapshot `api_list_snapshot.xlsx` ที่ถูกสร้างขึ้นจริงจากการรันสคริปต์ `export_openapi_excel.py`*
+### 5.3 ภาพผลลัพธ์การเรียกใช้งาน API นำเข้า Dataset
+```text
+[วางรูปภาพที่ 4: ผลลัพธ์การเรียก API Import Dataset จาก Hugging Face สำเร็จ (status: success) ผ่าน PowerShell]
+```
+* **คำอธิบาย:** ผลลัพธ์การยิง API `POST /api/v1/datasets/import-huggingface` ผ่าน PowerShell แสดงสถานะนำเข้าชุดข้อมูลสำเร็จ
+
+---
+
+### 5.4 ภาพผลลัพธ์การเรียกใช้งาน API สั่งตั้งเวลาเทรนโมเดล
+```text
+[วางรูปภาพที่ 5: ผลลัพธ์การเรียก API Enqueue คำสั่งตั้งเวลาเทรนโมเดลสำเร็จ (status: enqueued) ผ่าน PowerShell]
+```
+* **คำอธิบาย:** ผลลัพธ์การยิง API `POST /api/v1/training/enqueue` เพื่อบรรจุงานลง Redis Scheduled Queue
+
+---
+
+### 5.5 ภาพ Log การทำงานของ Trainer Worker สด
+```text
+[วางรูปภาพที่ 6: Log การรันเทรนโมเดล Token Classification บน GPU/CPU ของ Trainer Worker ผ่าน Terminal (docker compose logs -f trainer_worker)]
+```
+* **คำอธิบาย:** แสดง Log การรันของ Trainer Worker ที่ตื่นมาดึง Job จาก Redis เมื่อถึงเวลา แล้วรันฝึกโมเดล Token Classification (NER) และอัปโหลดไฟล์ไปยัง MinIO
 
 ---
 
@@ -173,11 +179,6 @@ docker compose up --build -d
 
 ### ขั้นตอนที่ 2: การสั่งนำเข้า Dataset จาก Hugging Face (Import Dataset)
 ```powershell
-$body = @{
-    dataset_name = "conll2003"
-    split = "train"
-} | ConvertTo-Json
-
 Invoke-RestMethod -Method Post -Uri "http://localhost:8000/api/v1/datasets/import-huggingface?dataset_name=conll2003&split=train"
 ```
 
