@@ -15,9 +15,8 @@
 
 ระบบถูกออกแบบตามสถาปัตยกรรม Microservices บน Docker Container โดยรวมอยู่ใน AI Ecosystem หลัก เพื่อให้แต่ละบริการทำงานร่วมกันอย่างเป็นระบบ ดังแผนภาพสถาปัตยกรรม:
 
-```text
-[วางรูปภาพที่ 1: แผนภาพสถาปัตยกรรมระบบ System Architecture Diagram (แผนภาพแสดงการไหลของข้อมูลระหว่าง Client -> FastAPI -> Redis Queue -> Trainer Worker -> MinIO Storage -> Hugging Face)]
-```
+![แผนภาพสถาปัตยกรรมระบบ System Architecture Diagram](backend/sandbox/screenshots/system_architecture_wtn_a07.png)
+*รูปที่ 1.1: แผนภาพสถาปัตยกรรมระบบ (FastAPI, Redis Queue, MinIO Storage และ Trainer Worker GPU)*
 
 ### อธิบายรายละเอียดของแต่ละคอมโพเนนต์ใน Diagram:
 1. **FastAPI Server Container (`ai_fastapi` - Port 8000):** ทำหน้าที่ให้บริการ REST API สำหรับการดึง Dataset จาก Hugging Face Hub (`POST /api/v1/datasets/import-huggingface`) และรับคำสั่งจองคิวเทรนแบบกำหนดเวลาล่วงหน้า (`POST /api/v1/training/enqueue`)
