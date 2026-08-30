@@ -130,42 +130,32 @@ docker compose up --build -d
 ## 5. ภาพประกอบผลการทำงานของระบบ (System Visual Evidence)
 
 ### 5.1 ภาพแสดงไฟล์ Dataset ใน MinIO Console
-```text
-[วางรูปภาพที่ 2: ภาพหน้าจอไฟล์ Dataset (conll2003_train.json) ในบักเก็ต datasets บน MinIO Console (http://localhost:9001)]
-```
-* **คำอธิบาย:** แสดงไฟล์ชุดข้อมูล `conll2003_train.json` ที่ถูกนำเข้าจาก Hugging Face และจัดเก็บอยู่ในบักเก็ต `datasets` บน MinIO Console
+![ไฟล์ Dataset conll2003_train.json ในบักเก็ต datasets บน MinIO Console](backend/sandbox/screenshots/screenshot_minio_datasets_wtn_a07.png)
+*รูปที่ 5.1: แสดงไฟล์ชุดข้อมูล conll2003_train.json ที่ถูกนำเข้าจาก Hugging Face และจัดเก็บอยู่ในบักเก็ต datasets บน MinIO Console (http://localhost:9001)*
 
 ---
 
 ### 5.2 ภาพแสดงไฟล์โมเดลไบนารีและ Log ใน MinIO Console
-```text
-[วางรูปภาพที่ 3: ภาพหน้าจอไฟล์โมเดล (model_job_001_bert_base_cased.tar.gz) และ Log ในบักเก็ต models บน MinIO Console]
-```
-* **คำอธิบาย:** แสดงไฟล์ค่าน้ำหนักโมเดล `model_job_001_bert_base_cased.tar.gz` และไฟล์ Log การเทรนในโฟลเดอร์ `logs/training_job_001.log` ที่ Trainer Worker เทรนเสร็จแล้วส่งขึ้นเก็บบน MinIO บักเก็ต `models`
+![ไฟล์โมเดล model_job_001_bert_base_cased.tar.gz และ Log ในบักเก็ต models บน MinIO Console](backend/sandbox/screenshots/screenshot_minio_models_wtn_a07.png)
+*รูปที่ 5.2: แสดงไฟล์ค่าน้ำหนักโมเดล model_job_001_bert_base_cased.tar.gz และโฟลเดอร์ logs ที่ Trainer Worker เทรนเสร็จแล้วส่งขึ้นเก็บบน MinIO บักเก็ต models*
 
 ---
 
 ### 5.3 ภาพผลลัพธ์การเรียกใช้งาน API นำเข้า Dataset
-```text
-[วางรูปภาพที่ 4: ผลลัพธ์การเรียก API Import Dataset จาก Hugging Face สำเร็จ (status: success) ผ่าน PowerShell]
-```
-* **คำอธิบาย:** ผลลัพธ์การยิง API `POST /api/v1/datasets/import-huggingface` ผ่าน PowerShell แสดงสถานะนำเข้าชุดข้อมูลสำเร็จ
+![ผลลัพธ์การเรียก API Import Dataset จาก Hugging Face สำเร็จผ่าน PowerShell](backend/sandbox/screenshots/screenshot_import_huggingface_api_wtn_a07.png)
+*รูปที่ 5.3: ผลลัพธ์การยิง API POST /api/v1/datasets/import-huggingface ผ่าน PowerShell แสดงสถานะนำเข้าชุดข้อมูลสำเร็จ (status: success)*
 
 ---
 
 ### 5.4 ภาพผลลัพธ์การเรียกใช้งาน API สั่งตั้งเวลาเทรนโมเดล
-```text
-[วางรูปภาพที่ 5: ผลลัพธ์การเรียก API Enqueue คำสั่งตั้งเวลาเทรนโมเดลสำเร็จ (status: enqueued) ผ่าน PowerShell]
-```
-* **คำอธิบาย:** ผลลัพธ์การยิง API `POST /api/v1/training/enqueue` เพื่อบรรจุงานลง Redis Scheduled Queue
+![ผลลัพธ์การเรียก API Enqueue คำสั่งตั้งเวลาเทรนโมเดลสำเร็จผ่าน PowerShell](backend/sandbox/screenshots/screenshot_enqueue_api_wtn_a07.png)
+*รูปที่ 5.4: ผลลัพธ์การยิง API POST /api/v1/training/enqueue เพื่อบรรจุงานลง Redis Scheduled Queue (status: enqueued)*
 
 ---
 
 ### 5.5 ภาพ Log การทำงานของ Trainer Worker สด
-```text
-[วางรูปภาพที่ 6: Log การรันเทรนโมเดล Token Classification บน GPU/CPU ของ Trainer Worker ผ่าน Terminal (docker compose logs -f trainer_worker)]
-```
-* **คำอธิบาย:** แสดง Log การรันของ Trainer Worker ที่ตื่นมาดึง Job จาก Redis เมื่อถึงเวลา แล้วรันฝึกโมเดล Token Classification (NER) และอัปโหลดไฟล์ไปยัง MinIO
+![Log การรันเทรนโมเดล Token Classification ของ Trainer Worker ผ่าน Terminal](backend/sandbox/screenshots/screenshot_trainer_worker_logs_wtn_a07.png)
+*รูปที่ 5.5: แสดง Log การรันของ Trainer Worker ที่ตื่นมาดึง Job จาก Redis เมื่อถึงเวลา แล้วรันฝึกโมเดล Token Classification (NER) และอัปโหลดไฟล์ไปยัง MinIO*
 
 ---
 
