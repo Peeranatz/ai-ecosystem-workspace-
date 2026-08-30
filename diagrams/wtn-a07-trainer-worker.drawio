@@ -1,0 +1,77 @@
+<mxfile host="65bd71144e">
+    <diagram id="WTN-A07-TrainerWorker" name="WTN-A07 Architecture">
+        <mxGraphModel dx="1000" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="850" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                
+                <!-- Title -->
+                <mxCell id="title" value="&lt;font color=&quot;#1F4E78&quot;&gt;&lt;b style=&quot;font-size: 18px;&quot;&gt;WTN-A07: Async Scheduled Trainer Worker Architecture&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 12px; color: #555555;&quot;&gt;FastAPI, Redis Scheduled Queue (ZADD), MinIO Object Storage &amp; PyTorch GPU Worker&lt;/span&gt;&lt;/font&gt;" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+                    <mxGeometry x="250" y="20" width="600" height="50" as="geometry"/>
+                </mxCell>
+
+                <!-- Client Request -->
+                <mxCell id="client" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b&gt;Client Request&lt;/b&gt;&lt;br&gt;&lt;i&gt;Enqueue (delay_seconds=10)&lt;/i&gt;&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#666666;arcSize=20;fontSize=12;" vertex="1" parent="1">
+                    <mxGeometry x="60" y="240" width="160" height="70" as="geometry"/>
+                </mxCell>
+
+                <!-- FastAPI Server -->
+                <mxCell id="fastapi" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b style=&quot;font-size: 14px;&quot;&gt;FastAPI Server&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 11px;&quot;&gt;ai_fastapi (Port 8000)&lt;/span&gt;&lt;/font&gt;" style="shape=hexagon;perimeter=hexagonPerimeter2;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#cfd8e3;strokeColor=#718096;" vertex="1" parent="1">
+                    <mxGeometry x="290" y="220" width="170" height="110" as="geometry"/>
+                </mxCell>
+
+                <!-- Redis Queue -->
+                <mxCell id="redis" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b style=&quot;font-size: 13px;&quot;&gt;Redis Scheduled Queue&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 11px;&quot;&gt;Sorted Set ZADD (Port 6379)&lt;/span&gt;&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+                    <mxGeometry x="285" y="440" width="180" height="100" as="geometry"/>
+                </mxCell>
+
+                <!-- Hugging Face Hub -->
+                <mxCell id="hf" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b style=&quot;font-size: 13px;&quot;&gt;Hugging Face Hub&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 11px;&quot;&gt;Token Classification Datasets&lt;/span&gt;&lt;/font&gt;" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+                    <mxGeometry x="580" y="100" width="200" height="90" as="geometry"/>
+                </mxCell>
+
+                <!-- MinIO Storage -->
+                <mxCell id="minio" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b style=&quot;font-size: 13px;&quot;&gt;MinIO Object Storage&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 11px;&quot;&gt;datasets &amp; models buckets&lt;/span&gt;&lt;/font&gt;" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+                    <mxGeometry x="590" y="230" width="180" height="110" as="geometry"/>
+                </mxCell>
+
+                <!-- Trainer Worker -->
+                <mxCell id="worker" value="&lt;font color=&quot;#000000&quot;&gt;&lt;b style=&quot;font-size: 13px;&quot;&gt;Trainer Worker&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size: 11px;&quot;&gt;ai_trainer_worker (PyTorch/GPU)&lt;/span&gt;&lt;/font&gt;" style="shape=step;perimeter=stepPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+                    <mxGeometry x="570" y="445" width="220" height="90" as="geometry"/>
+                </mxCell>
+
+                <!-- Arrows -->
+                <!-- 1. Client -> FastAPI -->
+                <mxCell id="e1" value="&lt;font color=&quot;#008080&quot;&gt;&lt;b&gt;POST /enqueue&lt;/b&gt;&lt;/font&gt;" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#008080;" edge="1" parent="1" source="client" target="fastapi">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 2. FastAPI -> Redis -->
+                <mxCell id="e2" value="&lt;font color=&quot;#b85450&quot;&gt;&lt;b&gt;(1) ZADD Scheduled Job&lt;/b&gt;&lt;/font&gt;" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#b85450;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="fastapi" target="redis">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 3. Redis -> Worker -->
+                <mxCell id="e3" value="&lt;font color=&quot;#d79b00&quot;&gt;&lt;b&gt;(2) Trigger at Time&lt;/b&gt;&lt;/font&gt;" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#d79b00;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="redis" target="worker">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 4. Hugging Face -> MinIO -->
+                <mxCell id="e4" value="&lt;font color=&quot;#d79b00&quot;&gt;&lt;b&gt;Import Dataset&lt;/b&gt;&lt;/font&gt;" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#d79b00;" edge="1" parent="1" source="hf" target="minio">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 5. Worker -> MinIO (Download) -->
+                <mxCell id="e5" value="&lt;font color=&quot;#6c8ebf&quot;&gt;&lt;b&gt;(3) Download Dataset&lt;/b&gt;&lt;/font&gt;" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#6c8ebf;exitX=0.4;exitY=0;entryX=0.4;entryY=1;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="worker" target="minio">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+                <!-- 6. Worker -> MinIO (Upload) -->
+                <mxCell id="e6" value="&lt;font color=&quot;#82b366&quot;&gt;&lt;b&gt;(4) Upload Model &amp; Log&lt;/b&gt;&lt;/font&gt;" style="endArrow=classic;html=1;rounded=0;strokeWidth=2;strokeColor=#82b366;exitX=0.7;exitY=0;entryX=0.7;entryY=1;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="worker" target="minio">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
