@@ -10,6 +10,7 @@ from app.routers import (
     model_router,
     training_router,
     predict_router,
+    inference_router,
     system_router,
     label_studio_router
 )
@@ -110,6 +111,7 @@ app.include_router(dataset_router.router, prefix=settings.API_V1_STR)
 app.include_router(model_router.router, prefix=settings.API_V1_STR)
 app.include_router(training_router.router, prefix=settings.API_V1_STR)
 app.include_router(predict_router.router, prefix=settings.API_V1_STR)
+app.include_router(inference_router.router, prefix=settings.API_V1_STR)
 app.include_router(label_studio_router.router, prefix=settings.API_V1_STR)
 app.include_router(system_router.router, prefix=settings.API_V1_STR)
 

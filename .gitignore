@@ -12,4 +12,6 @@ backend/logs/
 backend/sandbox/minio/downloaded_*
 backend/sandbox/minio/profile_*
 backend/sandbox/minio/sample_upload.txt
-
+*.db
+backend/mlflow.db
+backend/mlflow_artifacts/
