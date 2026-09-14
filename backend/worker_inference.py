@@ -4,10 +4,13 @@ import redis
 
 from app.core.config import settings
 from app.utils.logger import logger
+from app.core.telemetry import setup_telemetry
 from app.services.inference_worker_service import InferenceWorkerService, INFERENCE_QUEUE_NAME
 
 def main():
+    setup_telemetry("ai_inference_worker")
     logger.info("==================================================")
+
     logger.info("🚀 AI Ecosystem Inference Worker Started")
     logger.info(f"Connecting to Redis Queue '{INFERENCE_QUEUE_NAME}' on {settings.REDIS_HOST}:{settings.REDIS_PORT}")
     logger.info("==================================================")

@@ -4,6 +4,10 @@ import time
 
 from app.core.config import settings
 from app.utils.logger import logger
+from app.core.telemetry import setup_telemetry
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from prometheus_fastapi_instrumentator import Instrumentator
+
 from app.routers import (
     auth_router,
     dataset_router,
@@ -14,6 +18,10 @@ from app.routers import (
     system_router,
     label_studio_router
 )
+
+# Initialize OpenTelemetry Telemetry Setup
+setup_telemetry("ai_fastapi")
+
 
 # Detailed Tag Metadata for OpenAPI & Swagger UI
 tags_metadata = [
@@ -124,3 +132,8 @@ async def root():
         "openapi_json": f"{settings.API_V1_STR}/openapi.json",
         "health_check": f"{settings.API_V1_STR}/system/health"
     }
+
+# Enable OpenTelemetry Tracing & Prometheus Metrics Instrumentation
+FastAPIInstrumentor.instrument_app(app)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics")
+
